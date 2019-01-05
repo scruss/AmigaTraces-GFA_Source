@@ -1,0 +1,1629 @@
+$%3
+$m40000
+$P>
+$F>
+$N-
+$S&
+$S>
+init
+main
+sluit
+'
+> PROCEDURE init
+  RBOX 0
+  DIM objs%(7,2),mat(2,2),tmat(2,2),persmat(2,2),persinv(2,2),x(2),y(2),obs%(2)
+  ON ERROR GOSUB fout
+  ON BREAK GOSUB sluit
+  DIM reg%(15)
+  INLINE lib2%,550
+  ' inl_load(lib2%,550)           ! LtoW 1/2/3 en NormalWrd
+  ADD lib2%,32
+  ltow%={lib2%}+lib2%
+  ADD lib2%,4
+  ltow1%={lib2%}+lib2%
+  ADD lib2%,4
+  ltow2%={lib2%}+lib2%
+  ADD lib2%,4
+  normalwrd%={lib2%}+lib2%
+  INLINE lib3%,1350
+  ' inl_load(lib3%,1350)           ! laad & schrijfiff mplot/mpoint
+  ADD lib3%,32
+  laadiff%={lib3%}+lib3%
+  ADD lib3%,4
+  schrijfiff%={lib3%}+lib3%
+  ADD lib3%,4
+  bmplot%={lib3%}+lib3%
+  ADD lib3%,4
+  mplot%={lib3%}+lib3%
+  ADD lib3%,4
+  mpoint%={lib3%}+lib3%
+  '
+  INLINE lib4%,200
+  ' inl_load(lib4%,200)           ! LIfMul, ASR & Pow2
+  ADD lib4%,32
+  lifmul%={lib4%}+lib4%
+  ADD lib4%,4
+  shr%={lib4%}+lib4%
+  ADD lib4%,4
+  pow2%={lib4%}+lib4%
+  '
+  INLINE lib6%,2500
+  ' inl_load(lib6%,2500)           ! MoveTo2D
+  ADD lib6%,32
+  m2dcomp%={lib6%}+lib6%
+  ADD lib6%,4
+  mto2d%={lib6%}+lib6%
+  ADD lib6%,4
+  m2data%={lib6%}+lib6%
+  ADD lib6%,4
+  c_clp%={lib6%}+lib6%
+  '
+  '
+  OPENS 1,0,0,320,256,2,0 !32772
+  OPENW #1,0,0,320,256,8,2048+65536,1
+  BYTE{WINDOW(1)+55}=0
+  PLOT 0,0
+  CLEARW #1
+  FRONTS 1
+  ~RemakeDisplay()
+  bitm1%=LPEEK(LPEEK(WINDOW(1)+50)+4)
+  b1%={bitm1%+8}
+  b2%={bitm1%+12}
+  SETCOLOR 0,8,8,8
+  SETCOLOR 1,0,0,0
+  SETCOLOR 2,8,8,8
+  SETCOLOR 3,0,0,0
+  SETCOLOR 4,9,8,7
+  SETCOLOR 5,0,0,0
+  SETCOLOR 6,9,8,7
+  SETCOLOR 7,0,0,0
+  '  COLOR 6
+  ' PBOX 10,200,310,250
+  BYTE{bitm1%+5}=1
+  COLOR 1
+  RBOX 0
+  dia=60000
+  dproj=1
+  persp&=-1
+  lens&=24
+  phi=1.27
+  theta=-1.37
+  d%=dproj*lens&*20
+  d&=d%
+  rho%=3*dia/dproj
+  x1=d%
+  rhod=x1/rho%
+  rshift&=0
+  afm%=10000
+  zc%=10000
+  WHILE rhod<0.5 AND rshift&<12
+    rhod=2*rhod
+    ADD rshift&,1
+  WEND
+  rhod&=INT(32767*rhod)
+  calcphitheta
+  ~ActivateWindow(WINDOW(1))
+  init2
+RETURN
+> PROCEDURE init2
+  DIM p%(10,2),gr&(20,1),pr&(10,1),ordist%(10,10),q(5,3),ku%(7,2)
+  DIM q&(10,3),hoek(5),hl&(8,2)
+  mat%=@allocblock(18,&H10001)
+  kub%=@allocblock(40,&H10001)
+  wi1%=1
+  wi2%=2
+  '
+  tot&=3
+  DIM prec%(10,tot&,2),hoekrec(10,tot&)
+  FOR a&=0 TO tot&
+    p%(a&,2)=a&*15000
+  NEXT a&
+  todist%=0
+  FOR a&=0 TO tot&
+    FOR b&=0 TO tot&
+      IF a&<>b&
+        ordist%(a&,b&)=SQR((p%(a&,0)-p%(b&,0))^2+(p%(a&,1)-p%(b&,1))^2+(p%(a&,2)-p%(b&,2))^2)
+      ENDIF
+    NEXT b&
+    IF a&<>tot&
+      ADD todist%,ordist%(a&,a&+1)
+    ENDIF
+  NEXT a&
+  todist%=1.05*todist%
+  xvec%=0
+  yvec%=0
+  zvec%=15000
+  q&(1,0)=32767
+  q&(2,0)=32767
+  q&(3,0)=32767
+  q&(4,0)=32767
+  q&(5,0)=32767
+RETURN
+> PROCEDURE main
+  hilin&=-1
+  moving&=-1
+  teken
+  moving&=0
+  '
+  frame&=0
+  WHILE MOUSEK<>3
+    beweeg
+    i$=INKEY$
+    IF MOUSEK=1 AND i$<>"r"
+      x&=MOUSEX
+      y&=MOUSEY
+      t=theta
+      p=phi
+      COLOR 1
+      moving&=-1
+      WHILE MOUSEK
+        theta=t-(MOUSEX-x&)/100
+        phi=p-(MOUSEY-y&)/100
+        calcphitheta
+        teken
+      WEND
+      moving&=0
+    ELSE IF i$="r"
+      IF sel&<>0
+        rotate
+      ENDIF
+    ENDIF
+    IF i$=" "
+      ~DisplayBeep(0)
+      FOR a&=0 TO tot&
+        prec%(frame&,a&,0)=p%(a&,0)
+        prec%(frame&,a&,1)=p%(a&,1)
+        prec%(frame&,a&,2)=p%(a&,2)
+        hoekrec(frame&,a&)=hoek(a&)
+      NEXT a&
+      ADD frame&,1
+      WHILE INKEY$<>""
+      WEND
+      EXIT IF frame&=10
+    ENDIF
+    EXIT IF MOUSEK=3
+    ' teken
+  WEND
+  WHILE MOUSEK
+  WEND
+  IF frame&
+    WHILE MOUSEK<>3
+      FOR a&=0 TO tot&
+        p%(a&,0)=prec%(0,a&,0)
+        p%(a&,1)=prec%(0,a&,1)
+        p%(a&,2)=prec%(0,a&,2)
+      NEXT a&
+      FOR fr&=0 TO frame&-1
+        FOR fa&=1 TO 20
+          IF MOUSEK<>1
+            xm&=MOUSEX
+            ym&=MOUSEY
+            t=theta
+            p=phi
+          ENDIF
+          IF ease&
+            fa=(SINQ(270+fa&*9)+1)/2
+            fr1&=fr&+1
+            IF fr1&=frame&
+              fr1&=0
+            ENDIF
+            f=1-fa
+            FOR a&=0 TO tot&
+              p%(a&,0)=fa*prec%(fr1&,a&,0)+f*prec%(fr&,a&,0)
+              p%(a&,1)=fa*prec%(fr1&,a&,1)+f*prec%(fr&,a&,1)
+              p%(a&,2)=fa*prec%(fr1&,a&,2)+f*prec%(fr&,a&,2)
+            NEXT a&
+          ELSE
+            t=fa&
+            t=t/20
+            t2=t^2
+            t3=t2*t
+            ' fc=1
+            ' IF fc<>1
+            ' v1=-fc*t3+2*fc*t2-fc*t
+            ' v2=(2-fc)*t3+(fc-3)*t2+1
+            ' v3=(fc-2)*t3+(3-2*fc)*t2+fc*t
+            ' v4=fc*t3-fc*t2
+            ' ELSE
+            v1=-t3+2*t2-t
+            v2=t3-2*t2+1
+            v3=-t3+t2+t
+            v4=t3-t2
+            ' ENDIF
+            s1&=fr&-1
+            IF s1&<0
+              s1&=frame&-1
+            ENDIF
+            s2&=(s1&+1) MOD frame&
+            s3&=(s1&+2) MOD frame&
+            s4&=(s1&+3) MOD frame&
+            FOR a&=0 TO tot&
+              s&=-1
+              IF a&=0 OR a&=tot&
+                IF prec%(s2&,a&,0)=prec%(s3&,a&,0)
+                  IF prec%(s2&,a&,1)=prec%(s3&,a&,1)
+                    IF prec%(s2&,a&,2)=prec%(s3&,a&,2)
+                      s&=0
+                    ENDIF
+                  ENDIF
+                ENDIF
+              ENDIF
+              IF s&
+                p%(a&,0)=v1*prec%(s1&,a&,0)+v2*prec%(s2&,a&,0)+v3*prec%(s3&,a&,0)+v4*prec%(s4&,a&,0)
+                p%(a&,1)=v1*prec%(s1&,a&,1)+v2*prec%(s2&,a&,1)+v3*prec%(s3&,a&,1)+v4*prec%(s4&,a&,1)
+                p%(a&,2)=v1*prec%(s1&,a&,2)+v2*prec%(s2&,a&,2)+v3*prec%(s3&,a&,2)+v4*prec%(s4&,a&,2)
+              ENDIF
+              hoek(a&)=v1*hoekrec(s1&,a&)+v2*hoekrec(s2&,a&)+v3*hoekrec(s3&,a&)+v4*hoekrec(s4&,a&)
+            NEXT a&
+          ENDIF
+          herbereken1
+          herbereken1
+          IF MOUSEK=1
+            theta=theta-(MOUSEX-xm&)/500
+            phi=phi-(MOUSEY-ym&)/500
+            calcphitheta
+            moving&=-1
+            teken
+            moving&=0
+          ELSE
+            teken
+          ENDIF
+        NEXT fa&
+        EXIT IF MOUSEK=3
+      NEXT fr&
+    WEND
+  ENDIF
+  '
+  sluit
+  EDIT
+RETURN
+> PROCEDURE fout
+  OPENW #1
+  FRONTS 1
+  PRINT ERR$(ERR)
+  WHILE MOUSEK
+  WEND
+  WHILE MOUSEK=0
+  WEND
+  WHILE MOUSEK
+  WEND
+RETURN
+> PROCEDURE sluit
+  BYTE{bitm1%+5}=2
+  task%=FindTask(0)
+  ~SetTaskPri(task%,0)
+  IF handle%
+    ~Close(handle%)
+    CLR handle%
+  ENDIF
+  IF rinfo%
+    {rinfo%}=0
+  ENDIF
+  CLOSES 1
+  ' ~OpenWorkBench()
+  WHILE firstblock%
+    nextblock%={firstblock%}
+    freeblock(firstblock%)
+    firstblock%=nextblock%
+  WEND
+  EDIT
+RETURN
+'
+> PROCEDURE beweeg
+  IF MOUSEK=2
+    dist%=12345678
+    FOR a&=0 TO tot&
+      a%=ABS(xm&-pr&(a&,0))+ABS(ym&-pr&(a&,1))
+      IF a%<dist%
+        dist%=a%
+        sel&=a&
+      ENDIF
+    NEXT a&
+    WHILE MOUSEK=2
+      x%=p%(sel&,0)
+      y%=p%(sel&,1)
+      z%=p%(sel&,2)
+      dx1%=rho%*(xm&-MOUSEX)/d%
+      dy1%=rho%*(ym&-MOUSEY)/d%
+      xm&=MOUSEX
+      ym&=MOUSEY
+      xv%=dx1%*v1-dy1%*w1w2
+      yv%=-dx1%*w1-dy1%*v1w2
+      zv%=dy1%*v2
+      ADD x%,xv%
+      ADD y%,yv%
+      ADD z%,zv%
+      '
+      IF sel&=tot&
+        dist%=SQR((p%(0,0)-x%)^2+(p%(0,1)-y%)^2+(p%(0,2)-z%)^2)
+        IF dist%>todist%
+          f=dist%
+          f=todist%/f
+          x%=p%(0,0)-f*(p%(0,0)-x%)
+          y%=p%(0,1)-f*(p%(0,1)-y%)
+          z%=p%(0,2)-f*(p%(0,2)-z%)
+        ENDIF
+      ELSE IF sel&=0
+        dist%=SQR((p%(tot&,0)-x%)^2+(p%(tot&,1)-y%)^2+(p%(tot&,2)-z%)^2)
+        IF dist%>todist%
+          f=dist%
+          f=todist%/f
+          x%=p%(tot&,0)-f*(p%(tot&,0)-x%)
+          y%=p%(tot&,1)-f*(p%(tot&,1)-y%)
+          z%=p%(tot&,2)-f*(p%(tot&,2)-z%)
+        ENDIF
+      ENDIF
+      p%(sel&,0)=x%
+      p%(sel&,1)=y%
+      p%(sel&,2)=z%
+      herbereken1
+      herbereken1
+      teken
+    WEND
+  ENDIF
+  xm&=MOUSEX
+  ym&=MOUSEY
+RETURN
+> PROCEDURE rotate
+  x1%=p%(a&,0)-p%(a&-1,0)
+  y1%=p%(a&,1)-p%(a&-1,1)
+  z1%=p%(a&,2)-p%(a&-1,2)
+  ~C:ltow2%(3,0,L:V:x1%,L:V:y1%,L:V:z1%)
+  xn&=x1%
+  yn&=y1%
+  zn&=z1%
+  ~C:normalwrd%(L:V:xn&,L:V:yn&,L:V:zn&)
+  x&=MOUSEX
+  y&=MOUSEY
+  hoeko=hoek(sel&)
+  WHILE MOUSEK=0
+    hoek=x&-MOUSEX+y&-MOUSEY
+    hoek(sel&)=hoeko+hoek/2
+    LOCATE 1,1
+    PRINT hoek
+    teken
+  WEND
+RETURN
+> PROCEDURE teken
+  SWAP b1%,b2%
+  BYTE{bitm1%+5}=1
+  {bitm1%+8}=b2%
+  {bitm1%+12}=b1%
+  PLOT 0,0
+  CLEARW #1
+  tekengrond
+  COLOR 0
+  FOR a&=0 TO tot&
+    moveto2d(p%(a&,0),p%(a&,1),p%(a&,2),p%(a&,0),p%(a&,1),p%(a&,2))
+    pr&(a&,0)=160+x1&
+    pr&(a&,1)=128-y1&
+    ' IF a&<tot&
+    ' moveto2d(p%(a&,0),p%(a&,1),p%(a&,2),p%(a&+1,0),p%(a&+1,1),p%(a&+1,2))
+    ' ENDIF
+  NEXT a&
+  COLOR 1
+  berekenhoek
+  tekenmethoeken
+  BYTE{bitm1%+5}=2
+  ~RemakeDisplay()
+RETURN
+> PROCEDURE herbereken1
+  dist%=SQR((p%(0,0)-p%(1,0))^2+(p%(0,1)-p%(1,1))^2+(p%(0,2)-p%(1,2))^2)
+  f=ordist%(1,0)
+  IF dist%<>0
+    f=f/dist%
+    p%(1,0)=p%(0,0)+ROUND(f*(p%(1,0)-p%(0,0)))
+    p%(1,1)=p%(0,1)+ROUND(f*(p%(1,1)-p%(0,1)))
+    p%(1,2)=p%(0,2)+ROUND(f*(p%(1,2)-p%(0,2)))
+  ENDIF
+  FOR a&=1 TO tot&-2
+    dist%=SQR((p%(a&,0)-p%(a&+1,0))^2+(p%(a&,1)-p%(a&+1,1))^2+(p%(a&,2)-p%(a&+1,2))^2)
+    f=ordist%(a&,a&+1)
+    IF dist%<>0
+      f=0.5*f/dist%
+      IF f<>0
+        dx%=ROUND(f*(p%(a&,0)-p%(a&+1,0)))
+        dy%=ROUND(f*(p%(a&,1)-p%(a&+1,1)))
+        dz%=ROUND(f*(p%(a&,2)-p%(a&+1,2)))
+        x%=(p%(a&,0)+p%(a&+1,0))/2
+        y%=(p%(a&,1)+p%(a&+1,1))/2
+        z%=(p%(a&,2)+p%(a&+1,2))/2
+        p%(a&,0)=x%+dx%
+        p%(a&,1)=y%+dy%
+        p%(a&,2)=z%+dz%
+        p%(a&+1,0)=x%-dx%
+        p%(a&+1,1)=y%-dy%
+        p%(a&+1,2)=z%-dz%
+      ENDIF
+    ENDIF
+  NEXT a&
+  dist%=SQR((p%(tot&-1,0)-p%(tot&,0))^2+(p%(tot&-1,1)-p%(tot&,1))^2+(p%(tot&-1,2)-p%(tot&,2))^2)
+  f=ordist%(tot&,tot&-1)
+  IF dist%<>0
+    f=f/dist%
+    p%(tot&-1,0)=p%(tot&,0)+ROUND(f*(p%(tot&-1,0)-p%(tot&,0)))
+    p%(tot&-1,1)=p%(tot&,1)+ROUND(f*(p%(tot&-1,1)-p%(tot&,1)))
+    p%(tot&-1,2)=p%(tot&,2)+ROUND(f*(p%(tot&-1,2)-p%(tot&,2)))
+  ENDIF
+RETURN
+> PROCEDURE herbereken2
+  FOR b&=0 TO tot&
+    FOR a&=0 TO tot&
+      IF b&<a&
+        dist%=SQR((p%(a&,0)-p%(b&,0))^2+(p%(a&,1)-p%(b&,1))^2+(p%(a&,2)-p%(b&,2))^2)
+        IF dist%=0
+          dist%=1
+        ENDIF
+        f=ordist%(a&,b&)
+        f=0.5*f/dist%
+        IF f<>0
+          dx%=f*(p%(a&,0)-p%(b&,0))
+          dy%=f*(p%(a&,1)-p%(b&,1))
+          dz%=f*(p%(a&,2)-p%(b&,2))
+          x&=(p%(a&,0)+p%(b&,0))/2-dx%
+          y&=(p%(a&,1)+p%(b&,1))/2-dy%
+          z&=(p%(a&,2)+p%(b&,2))/2-dz%
+          IF a&<>0 AND a&<>tot&
+            p%(a&,0)=(p%(a&,0)+p%(b&,0))/2+dx%
+            p%(a&,1)=(p%(a&,1)+p%(b&,1))/2+dy%
+            p%(a&,2)=(p%(a&,2)+p%(b&,2))/2+dz%
+          ENDIF
+          IF b&<>0 AND b&<>tot&
+            p%(b&,0)=x&
+            p%(b&,1)=y&
+            p%(b&,2)=z&
+          ENDIF
+        ENDIF
+      ENDIF
+    NEXT a&
+  NEXT b&
+RETURN
+> PROCEDURE tekenkub(xt%,yt%,zt%)
+  LOCAL x1%,y1%,z1%,x2%,y2%,z2%
+  x%=1700
+  y%=2700
+  z%=7000 !{edbase%+2}/2
+  matt%=mat%
+  WORD{kub%}=SHR(1700*WORD{matt%},15)  !C:lifmul%(L:x%,WORD{matt%})
+  WORD{kub%+4}=SHR(2700*WORD{matt%+2},15)
+  WORD{kub%+8}=SHR(7000*WORD{matt%+4},15)
+  ADD matt%,6
+  ADD kub%,12
+  WORD{kub%}=SHR(1700*WORD{matt%},15)  !C:lifmul%(L:x%,WORD{matt%})
+  WORD{kub%+4}=SHR(2700*WORD{matt%+2},15)
+  WORD{kub%+8}=SHR(7000*WORD{matt%+4},15)
+  ADD matt%,6
+  ADD kub%,12
+  WORD{kub%}=SHR(1700*WORD{matt%},15)  !C:lifmul%(L:x%,WORD{matt%})
+  WORD{kub%+4}=SHR(2700*WORD{matt%+2},15)
+  WORD{kub%+8}=SHR(7000*WORD{matt%+4},15)
+  ADD kub%,-24
+  IF hilin&
+    COLOR 0
+  ENDIF
+  FOR c&=0 TO 3
+    x%=xt%
+    y%=yt%
+    z%=zt%
+    SELECT c&
+    CASE 1,2
+      ADD x%,WORD{kub%}
+      ADD y%,WORD{kub%+12}
+      ADD z%,WORD{kub%+24}
+    DEFAULT
+      SUB x%,WORD{kub%}
+      SUB y%,WORD{kub%+12}
+      SUB z%,WORD{kub%+24}
+    ENDSELECT
+    SELECT c&
+    CASE 0,1
+      ADD x%,WORD{kub%+4}
+      ADD y%,WORD{kub%+16}
+      ADD z%,WORD{kub%+28}
+    DEFAULT
+      SUB x%,WORD{kub%+4}
+      SUB y%,WORD{kub%+16}
+      SUB z%,WORD{kub%+28}
+    ENDSELECT
+    x1%=x%-WORD{kub%+8}
+    y1%=y%-WORD{kub%+20}
+    z1%=z%-WORD{kub%+32}
+    x2%=x%+WORD{kub%+8}
+    y2%=y%+WORD{kub%+20}
+    z2%=z%+WORD{kub%+32}
+    moveto2d(x1%,y1%,z1%,x2%,y2%,z2%)
+    hl&(c&,0)=160+x1&
+    hl&(c&,1)=128-y1&
+    hl&(c&+4,0)=160+x2&
+    hl&(c&+4,1)=128-y2&
+  NEXT c&
+  '
+  IF hilin&
+    COLOR 1
+    hilin
+  ELSE
+    FOR c&=0 TO 2
+      LINE hl&(c&,0),hl&(c&,1),hl&(c&+1,0),hl&(c&+1,1)
+      ADD c&,4
+      LINE hl&(c&,0),hl&(c&,1),hl&(c&+1,0),hl&(c&+1,1)
+      SUB c&,4
+    NEXT c&
+    LINE hl&(3,0),hl&(3,1),hl&(0,0),hl&(0,1)
+    LINE hl&(7,0),hl&(7,1),hl&(4,0),hl&(4,1)
+  ENDIF
+RETURN
+> PROCEDURE hilin
+  hl&=0
+  IF @vistest(0,4,7)>0
+    hl&=hl& OR 153
+  ENDIF
+  IF @vistest(1,5,4)>0
+    hl&=hl& OR 51
+  ENDIF
+  IF @vistest(2,6,5)>0
+    hl&=hl& OR 102
+  ENDIF
+  IF @vistest(3,7,6)>0
+    hl&=hl& OR 204
+  ENDIF
+  IF @vistest(4,5,6)>0
+    hl&=hl& OR 240
+  ENDIF
+  IF @vistest(0,3,1)>0
+    hl&=hl& OR 15
+  ENDIF
+  '
+  IF (hl& AND 3)=3
+    LINE hl&(0,0),hl&(0,1),hl&(1,0),hl&(1,1)
+  ENDIF
+  IF (hl& AND 6)=6
+    LINE hl&(1,0),hl&(1,1),hl&(2,0),hl&(2,1)
+  ENDIF
+  IF (hl& AND 12)=12
+    LINE hl&(2,0),hl&(2,1),hl&(3,0),hl&(3,1)
+  ENDIF
+  IF (hl& AND 9)=9
+    LINE hl&(3,0),hl&(3,1),hl&(0,0),hl&(0,1)
+  ENDIF
+  IF (hl& AND 48)=48
+    LINE hl&(4,0),hl&(4,1),hl&(5,0),hl&(5,1)
+  ENDIF
+  IF (hl& AND 96)=96
+    LINE hl&(5,0),hl&(5,1),hl&(6,0),hl&(6,1)
+  ENDIF
+  IF (hl& AND 192)=192
+    LINE hl&(6,0),hl&(6,1),hl&(7,0),hl&(7,1)
+  ENDIF
+  IF (hl& AND 144)=144
+    LINE hl&(7,0),hl&(7,1),hl&(4,0),hl&(4,1)
+  ENDIF
+  IF (hl& AND 17)=17
+    LINE hl&(0,0),hl&(0,1),hl&(4,0),hl&(4,1)
+  ENDIF
+  IF (hl& AND 34)=34
+    LINE hl&(1,0),hl&(1,1),hl&(5,0),hl&(5,1)
+  ENDIF
+  IF (hl& AND 68)=68
+    LINE hl&(2,0),hl&(2,1),hl&(6,0),hl&(6,1)
+  ENDIF
+  IF (hl& AND 136)=136
+    LINE hl&(3,0),hl&(3,1),hl&(7,0),hl&(7,1)
+  ENDIF
+RETURN
+> PROCEDURE tekenmethoeken
+  x1%=p%(0,0)
+  y1%=p%(0,1)
+  z1%=p%(0,2)
+  FOR a&=1 TO tot&
+    q&(0,0)=q&(a&,0)
+    q&(0,1)=q&(a&,1)
+    q&(0,2)=q&(a&,2)
+    q&(0,3)=q&(a&,3)
+    FOR b&=a&-1 DOWNTO 1
+      iquatmul(0,b&,0)
+    NEXT b&
+    xt%=xvec%
+    yt%=yvec%
+    zt%=zvec%
+    s&=C:ltow%(L:V:xt%,L:V:yt%,L:V:zt%)
+    x1&=xt%
+    y1&=yt%
+    z1&=zt%
+    iquatomat(0,mat%)
+    x2&=SHR(WORD{mat%}*x1&+WORD{mat%+2}*y1&+WORD{mat%+4}*z1&,15)
+    ADD mat%,6
+    y2&=SHR(WORD{mat%}*x1&+WORD{mat%+2}*y1&+WORD{mat%+4}*z1&,15)
+    ADD mat%,6
+    z2&=SHR(WORD{mat%}*x1&+WORD{mat%+2}*y1&+WORD{mat%+4}*z1&,15)
+    SUB mat%,12
+    IF s&
+      x2%=x1%+SHL(x2&,s&)
+      y2%=y1%+SHL(y2&,s&)
+      z2%=z1%+SHL(z2&,s&)
+    ELSE
+      x2%=x1%+x2&
+      y2%=y1%+y2&
+      z2%=z1%+z2&
+    ENDIF
+    ' DEFLINE &HAAAA
+    moveto2d(x1%,y1%,grnd%,x2%,y2%,grnd%)
+    ' DEFLINE 1
+    ' moveto2d(x1%,y1%,z1%,x2%,y2%,z2%)
+    tekenkub((x1%+x2%)/2,(y1%+y2%)/2,(z1%+z2%)/2)
+    x1%=x2%
+    y1%=y2%
+    z1%=z2%
+  NEXT a&
+RETURN
+> PROCEDURE berekenhoek
+  ' LOCATE 1,1
+  FOR a&=1 TO tot&
+    x1%=p%(a&,0)-p%(a&-1,0)
+    y1%=p%(a&,1)-p%(a&-1,1)
+    z1%=p%(a&,2)-p%(a&-1,2)
+    IF a&>1
+      q&(0,0)=32767
+      q&(0,1)=0
+      q&(0,2)=0
+      q&(0,3)=0
+      FOR b&=a&-1 DOWNTO 1
+        iquatmul(0,b&,0)
+      NEXT b&
+      xt%=xvec%
+      yt%=yvec%
+      zt%=zvec%
+      iquatmulvec
+      x2%=xt%
+      y2%=yt%
+      z2%=zt%
+    ELSE
+      x2%=xvec%
+      y2%=yvec%
+      z2%=zvec%
+    ENDIF
+    ~C:ltow2%(6,1,L:V:x1%,L:V:y1%,L:V:z1%,L:V:x2%,L:V:y2%,L:V:z2%)
+    x1&=x1%
+    x2&=x2%
+    y1&=y1%
+    y2&=y2%
+    z1&=z1%
+    z2&=z2%
+    xn%=y1&*z2&-y2&*z1&
+    yn%=x2&*z1&-x1&*z2&
+    zn%=y2&*x1&-y1&*x2&
+    ~C:ltow%(L:V:xn%,L:V:yn%,L:V:zn%)
+    xn&=xn%
+    yn&=yn%
+    zn&=zn%
+    ~C:normalwrd%(L:V:xn&,L:V:yn&,L:V:zn&)
+    ~C:normalwrd%(L:V:x1&,L:V:y1&,L:V:z1&)
+    ~C:normalwrd%(L:V:x2&,L:V:y2&,L:V:z2&)
+    c&=SHR(x1&*x2&+y1&*y2&+z1&*z2&,15)
+    co=c&
+    co=co/32768
+    h=ACOS(co)
+    h=-h/2
+    co=COS(h)
+    si=SIN(h)
+    q&(a&,0)=ROUND(32767*co)
+    q&(a&,1)=INT(si*xn&)
+    q&(a&,2)=INT(si*yn&)
+    q&(a&,3)=INT(si*zn&)
+    IF hoek(a&)<>0
+      h=hoek(a&)
+      co=COSQ(h)
+      si=SINQ(h)
+      q&(0,0)=ROUND(32767*co)
+      q&(0,1)=INT(si*x1&)
+      q&(0,2)=INT(si*y1&)
+      q&(0,3)=INT(si*z1&)
+      iquatmul(0,a&,a&)
+    ENDIF
+  NEXT a&
+RETURN
+> PROCEDURE tekenmethoeken2  !quat afgeleid uit vorige stand
+  x1%=p%(0,0)
+  y1%=p%(0,1)
+  z1%=p%(0,2)
+  FOR a&=1 TO tot&
+    q&(0,0)=q&(a&,0)
+    q&(0,1)=q&(a&,1)
+    q&(0,2)=q&(a&,2)
+    q&(0,3)=q&(a&,3)
+    ' FOR b&=a&-1 DOWNTO 1
+    ' iquatmul(0,b&,0)
+    ' NEXT b&
+    xt%=xvec%
+    yt%=yvec%
+    zt%=zvec%
+    iquatmulvec
+    x2%=x1%+xt%
+    y2%=y1%+yt%
+    z2%=z1%+zt%
+    ' DEFLINE &HAAAA
+    moveto2d(x1%,y1%,grnd%,x2%,y2%,grnd%)
+    ' DEFLINE 1
+    ' moveto2d(x1%,y1%,z1%,x2%,y2%,z2%)
+    tekenkub((x1%+x2%)/2,(y1%+y2%)/2,(z1%+z2%)/2)
+    x1%=x2%
+    y1%=y2%
+    z1%=z2%
+  NEXT a&
+RETURN
+> PROCEDURE berekenhoek2     !dus geen hiera nodig. Werkt slecht!
+  LOCATE 1,1
+  FOR a&=1 TO tot&
+    x1%=p%(a&,0)-p%(a&-1,0)
+    y1%=p%(a&,1)-p%(a&-1,1)
+    z1%=p%(a&,2)-p%(a&-1,2)
+    xt%=xvec%
+    yt%=yvec%
+    zt%=zvec%
+    q&(0,0)=q&(a&,0)
+    q&(0,1)=q&(a&,1)
+    q&(0,2)=q&(a&,2)
+    q&(0,3)=q&(a&,3)
+    iquatmulvec
+    x2%=xt%
+    y2%=yt%
+    z2%=zt%
+    ~C:ltow2%(6,1,L:V:x1%,L:V:y1%,L:V:z1%,L:V:x2%,L:V:y2%,L:V:z2%)
+    x1&=x1%
+    x2&=x2%
+    y1&=y1%
+    y2&=y2%
+    z1&=z1%
+    z2&=z2%
+    xn%=y1&*z2&-y2&*z1&
+    yn%=x2&*z1&-x1&*z2&
+    zn%=y2&*x1&-y1&*x2&
+    ~C:ltow%(L:V:xn%,L:V:yn%,L:V:zn%)
+    xn&=xn%
+    yn&=yn%
+    zn&=zn%
+    ~C:normalwrd%(L:V:xn&,L:V:yn&,L:V:zn&)
+    ~C:normalwrd%(L:V:x1&,L:V:y1&,L:V:z1&)
+    ~C:normalwrd%(L:V:x2&,L:V:y2&,L:V:z2&)
+    c&=SHR(x1&*x2&+y1&*y2&+z1&*z2&,15)
+    PRINT c&
+    IF c&>=32760
+      co=1
+    ELSE
+      co=c&
+      co=co/32768
+    ENDIF
+    h=ACOS(co)
+    h=-h/2
+    co=COS(h)
+    si=SIN(h)
+    q&(0,0)=ROUND(32767*co)
+    q&(0,1)=INT(si*xn&)
+    q&(0,2)=INT(si*yn&)
+    q&(0,3)=INT(si*zn&)
+    iquatmul(0,a&,a&)
+  NEXT a&
+RETURN
+'
+> PROCEDURE iquatomat(q&,mat%)
+  qd&=q&(q&,0)
+  qa&=q&(q&,1)
+  qb&=q&(q&,2)
+  qc&=q&(q&,3)
+  '
+  qdd&=SHR(qd&*qd&,15)
+  qda&=SHR(qd&*qa&,15)
+  qdb&=SHR(qd&*qb&,15)
+  qdc&=SHR(qd&*qc&,15)
+  qaa&=SHR(qa&*qa&,15)
+  qab&=SHR(qa&*qb&,15)
+  qac&=SHR(qa&*qc&,15)
+  qbb&=SHR(qb&*qb&,15)
+  qbc&=SHR(qb&*qc&,15)
+  qcc&=SHR(qc&*qc&,15)
+  '
+  WORD{mat%}=qdd&+qaa&-qbb&-qcc&
+  WORD{mat%+2}=2*(-qdc&+qab&)
+  WORD{mat%+4}=2*(qdb&+qac&)
+  WORD{mat%+6}=2*(qdc&+qab&)
+  WORD{mat%+8}=qdd&-qaa&+qbb&-qcc&
+  WORD{mat%+10}=2*(-qda&+qbc&)
+  WORD{mat%+12}=2*(-qdb&+qac&)
+  WORD{mat%+14}=2*(qda&+qbc&)
+  WORD{mat%+16}=qdd&-qaa&-qbb&+qcc&
+RETURN
+> PROCEDURE iquatmul(q1&,q2&,q3&)
+  qw1&=q&(q1&,0)
+  qx1&=q&(q1&,1)
+  qy1&=q&(q1&,2)
+  qz1&=q&(q1&,3)
+  '
+  qw2&=q&(q2&,0)
+  qx2&=q&(q2&,1)
+  qy2&=q&(q2&,2)
+  qz2&=q&(q2&,3)
+  '
+  q&(q3&,0)=SHR(qw1&*qw2&-qx1&*qx2&-qy1&*qy2&-qz1&*qz2&,15)
+  q&(q3&,1)=SHR(qw1&*qx2&+qx1&*qw2&+qy1&*qz2&-qz1&*qy2&,15)
+  q&(q3&,2)=SHR(qw1&*qy2&+qy1&*qw2&+qz1&*qx2&-qx1&*qz2&,15)
+  q&(q3&,3)=SHR(qw1&*qz2&+qz1&*qw2&+qx1&*qy2&-qy1&*qx2&,15)
+RETURN
+> PROCEDURE iquatmulvec
+  iquatomat(0,mat%)
+  imatmul(xt%,yt%,zt%,mat%)
+RETURN
+> PROCEDURE imatmul(x%,y%,z%,mat%)
+  xtt%=C:lifmul%(L:x%,WORD{mat%})+C:lifmul%(L:y%,WORD{mat%+2})+C:lifmul%(L:z%,WORD{mat%+4})
+  ADD mat%,6
+  ytt%=C:lifmul%(L:x%,WORD{mat%})+C:lifmul%(L:y%,WORD{mat%+2})+C:lifmul%(L:z%,WORD{mat%+4})
+  ADD mat%,6
+  zt%=C:lifmul%(L:x%,WORD{mat%})+C:lifmul%(L:y%,WORD{mat%+2})+C:lifmul%(L:z%,WORD{mat%+4})
+  xt%=xtt%
+  yt%=ytt%
+RETURN
+'
+> PROCEDURE inl_load(adres%,len%)
+  inl$="ram:rt.inl"
+  FILESELECT "Load inline","Load",inl$,inl$
+  inl$=inl$+CHR$(0)
+  inlhandle%=Open(V:inl$,1005)
+  IF inlhandle%
+    ~Read(inlhandle%,adres%,len%)
+    ~Close(inlhandle%)
+    inlhandle%=0
+  ENDIF
+RETURN
+> PROCEDURE freeblock(adres%)
+  IF {adres%-4}=CVI("BLCK") OR {adres%+12}=CVI("BLCK")
+    IF {adres%-4}=CVI("BLCK")
+      block%=adres%-16
+    ELSE
+      block%=adres%
+    ENDIF
+    nextblock%={block%}
+    prevblock%={block%+4}
+    IF nextblock%=0
+      ' lastblock
+      IF prevblock%
+        {prevblock%}=0
+      ELSE
+        firstblock%=0
+      ENDIF
+      lastblock%=prevblock%
+    ELSE IF prevblock%=0
+      ' firstblock
+      IF nextblock%
+        {nextblock%+4}=0
+      ENDIF
+      firstblock%=nextblock%
+    ELSE
+      {prevblock%}=nextblock%
+      {nextblock%+4}=prevblock%
+    ENDIF
+    {block%+12}=CVI("FREE")
+    ~FreeMem(block%,{block%+8})
+  ELSE
+    ALERT 0,"No Block!",1," OK ",dum%
+    EDIT
+  ENDIF
+RETURN
+' view
+> PROCEDURE calcphitheta
+  v1=SIN(theta)
+  w1=COS(theta)
+  v2=SIN(phi)
+  w2=COS(phi)
+  w1w2=w1*w2
+  w1v2=w1*v2
+  v1w2=v1*w2
+  v1v2=v1*v2
+  '
+  persmat(0,0)=-v1
+  persmat(0,1)=w1
+  persmat(0,2)=0
+  persmat(1,0)=-w1w2
+  persmat(1,1)=-v1w2
+  persmat(1,2)=v2
+  persmat(2,0)=-w1v2
+  persmat(2,1)=-v1v2
+  persmat(2,2)=-w2
+  '
+  RBOX persinv()=persmat()
+  SWAP persinv(0,1),persinv(1,0)
+  SWAP persinv(2,1),persinv(1,2)
+  SWAP persinv(0,2),persinv(2,0)
+  '
+  v1&=-32767*v1
+  w1&=32767*w1
+  w1w2&=-32767*w1w2
+  v1w2&=-32767*v1w2
+  v2&=32767*v2
+  w1v2&=-32767*w1v2
+  v1v2&=-32767*v1v2
+  w2&=-32767*w2
+  initm22d
+  '
+RETURN
+> PROCEDURE calc.fast
+  x1%=afm%
+  y1%=afm%
+  z1%=afm%
+  FOR c&=0 TO 7
+    SELECT c&
+    CASE 1,2,5,6
+      objs%(c&,0)=x1%
+    DEFAULT
+      objs%(c&,0)=-x1%
+    ENDSELECT
+    SELECT c&
+    CASE 0,1,4,5
+      objs%(c&,1)=y1%
+    DEFAULT
+      objs%(c&,1)=-y1%
+    ENDSELECT
+    SELECT c&
+    CASE 4,5,6,7
+      objs%(c&,2)=z1%
+    DEFAULT
+      objs%(c&,2)=-z1%
+    ENDSELECT
+  NEXT c&
+  FOR c&=0 TO 2
+    moveto2d(objs%(c&,0),objs%(c&,1),objs%(c&,2),objs%(c&+1,0),objs%(c&+1,1),objs%(c&+1,2))
+    ADD c&,4
+    moveto2d(objs%(c&,0),objs%(c&,1),objs%(c&,2),objs%(c&+1,0),objs%(c&+1,1),objs%(c&+1,2))
+    SUB c&,4
+  NEXT c&
+  moveto2d(objs%(3,0),objs%(3,1),objs%(3,2),objs%(0,0),objs%(0,1),objs%(0,2))
+  moveto2d(objs%(7,0),objs%(7,1),objs%(7,2),objs%(4,0),objs%(4,1),objs%(4,2))
+  FOR c&=0 TO 3
+    moveto2d(objs%(c&,0),objs%(c&,1),objs%(c&,2),objs%(c&+4,0),objs%(c&+4,1),objs%(c&+4,2))
+  NEXT c&
+RETURN
+> PROCEDURE tekengrond
+  DEFLINE &H1111
+  IF moving&
+    d2%=-0.8*rho%
+    COLOR 1
+    IF persp&=-1
+      dg%=dia/3
+      g1%=2*dg%
+      g%=-2*dg%
+      FOR a&=0 TO 4
+        moveto2d(g%,-g1%,grnd%,g%,g1%,grnd%)
+        gr&(a&,0)=160+x1&
+        gr&(a&,1)=128-y1&
+        gr&(a&+10,0)=160+x2&
+        gr&(a&+10,1)=128-y2&
+        moveto2d(-g1%,g%,grnd%,g1%,g%,grnd%)
+        gr&(a&+5,0)=160+x1&
+        gr&(a&+5,1)=128-y1&
+        gr&(a&+15,0)=160+x2&
+        gr&(a&+15,1)=128-y2&
+        ADD g%,dg%
+      NEXT a&
+    ENDIF
+  ELSE
+    FOR a&=0 TO 9
+      LINE gr&(a&,0),gr&(a&,1),gr&(a&+10,0),gr&(a&+10,1)
+    NEXT a&
+  ENDIF
+  DEFLINE 1
+RETURN
+> PROCEDURE initm22d
+  WORD{m2data%}=persp&              ! persp&
+  WORD{m2data%+2}=view&
+  '
+  IF persp&=-2
+    d&=lens&*20
+    {m2data%+48}=30*d&
+    {m2data%+52}=d%
+    {m2data%+4}=obs%(0)             ! centrum
+    {m2data%+8}=obs%(1)
+    {m2data%+12}=obs%(2)
+  ELSE
+    d&=dproj*lens&*20
+    rho%=3*dia/dproj
+    {m2data%+48}=-0.8*rho%
+    {m2data%+52}=rho%
+    {m2data%+4}=xc%
+    {m2data%+8}=yc%
+    {m2data%+12}=zc%
+  ENDIF
+  '
+  IF persp&
+    rhod=1/d&
+    rhod&=SHR&(WORD{V:rhod},1)
+    rshift&=1022-WORD{V:rhod+6}
+    IF rshift&>18
+      rhod&=SHR&(rhod&,rshift&-18)
+      rshift&=18
+    ENDIF
+  ELSE
+    x1=d&
+    rhod=x1/rho%
+    rhod&=SHR&(WORD{V:rhod},1)
+    rshift&=1022-WORD{V:rhod+6}
+    IF rshift&>12
+      rhod&=SHR&(rhod&,rshift&-12)
+      rshift&=12
+    ENDIF
+  ENDIF
+  '
+  WORD{m2data%+16}=rshift&
+  WORD{m2data%+18}=rhod&
+  '
+  IF persp&
+    WORD{m2data%+30}=v1&
+    WORD{m2data%+32}=w1&
+    WORD{m2data%+34}=0
+    WORD{m2data%+36}=w1w2&
+    WORD{m2data%+38}=v1w2&
+    WORD{m2data%+40}=v2&
+    WORD{m2data%+42}=w1v2&
+    WORD{m2data%+44}=v1v2&
+    WORD{m2data%+46}=w2&
+  ELSE
+    j1&=SHR(v1&*rhod&,15)
+    j2&=SHR(w1&*rhod&,15)
+    j3&=SHR(w1w2&*rhod&,15)
+    j4&=SHR(v1w2&*rhod&,15)
+    j5&=SHR(v2&*rhod&,15)
+    '
+    WORD{m2data%+2}=view&
+    WORD{m2data%+20}=j5&
+    WORD{m2data%+22}=j4&
+    WORD{m2data%+24}=j3&
+    WORD{m2data%+26}=j2&
+    WORD{m2data%+28}=j1&
+  ENDIF
+  '
+  WORD{m2data%+56}=d&
+  WORD{m2data%+58}=318
+  WORD{m2data%+60}=254
+  ~C:m2dcomp%()
+RETURN
+> PROCEDURE moveto2d(x1%,y1%,z1%,x2%,y2%,z2%)
+  IF C:mto2d%(L:x1%,L:y1%,L:z1%,L:x2%,L:y2%,L:z2%)
+    x1&=WORD{c_clp%}
+    y1&=WORD{c_clp%+2}
+    x2&=WORD{c_clp%+4}
+    y2&=WORD{c_clp%+6}
+    LINE 160+x1&,128-y1&,160+x2&,128-y2&
+  ENDIF
+RETURN
+> PROCEDURE pointo2d(x1%,y1%,z1%)
+  LOCAL s&,x&,y&
+  IF persp&=-2
+    r%=d%
+    d2%=30*d&
+    SUB x1%,obs%(0)
+    SUB y1%,obs%(1)
+    SUB z1%,obs%(2)
+  ELSE
+    d2%=-0.8*rho%
+    r%=rho%
+    SUB x1%,xc%
+    SUB y1%,yc%
+    SUB z1%,zc%
+  ENDIF
+  IF persp&=0
+    IF view&=31 OR view&=29 OR view&=61
+      IF view&=29
+        y1%=z1%
+      ELSE IF view&=31
+        x1%=y1%
+        y1%=z1%
+      ENDIF
+      shift&=C:ltow1%(L:V:x1%,L:V:y1%,L:V:y1%)
+      x1&=x1%
+      y1&=y1%
+      s&=15-shift&+rshift&
+    ELSE
+      shift&=C:ltow1%(L:V:x1%,L:V:y1%,L:V:z1%)
+      s&=15-shift&+rshift&
+      c1&=x1%
+      c2&=y1%
+      z1&=z1%
+      x1&=SHR(-v1&*c1&+w1&*c2&,15)
+      y1&=SHR(-w1w2&*c1&-v1w2&*c2&+v2&*z1&,15)
+    ENDIF
+    IF x1&<0
+      x1&=160-SHR(-rhod&*x1&,s&)
+    ELSE
+      x1&=160+SHR(rhod&*x1&,s&)
+    ENDIF
+    IF y1&<0
+      y1&=128+SHR(-rhod&*y1&,s&)
+    ELSE
+      y1&=128-SHR(rhod&*y1&,s&)
+    ENDIF
+    IF x1&>0 AND x1&<640 AND y1&>0 AND y1&<500
+    ELSE
+      y1&=3200
+      x1&=3200
+    ENDIF
+    z1=rho%
+  ELSE
+    shift&=C:ltow%(L:V:x1%,L:V:y1%,L:V:z1%)
+    x1&=x1%
+    y1&=y1%
+    z1&=z1%
+    x1%=-v1&*x1&+w1&*y1&
+    IF x1%<0
+      x1%=-SHR(-x1%,15-shift&)
+    ELSE
+      x1%=SHR(x1%,15-shift&)
+    ENDIF
+    y1%=-w1w2&*x1&-v1w2&*y1&+v2&*z1&
+    IF y1%<0
+      y1%=-SHR(-y1%,15-shift&)
+    ELSE
+      y1%=SHR(y1%,15-shift&)
+    ENDIF
+    z1%=-w1v2&*x1&-v1v2&*y1&-w2&*z1&
+    IF z1%<0
+      z1%=-SHR(-z1%,15-shift&)
+    ELSE
+      z1%=SHR(z1%,15-shift&)
+    ENDIF
+    '
+    x1&=3200
+    y1&=3200
+    z1=z1%+r%
+    IF z1%>d2%
+      '
+      ADD z1%,r%
+      a%=z1%/d&
+      shift&=C:ltow%(L:V:a%,L:V:a%,L:V:a%)
+      z1&=a%
+      a0%=x1%/z1&
+      IF a0%>0
+        x1&=160+SHR(a0%,shift&)
+      ELSE
+        x1&=160-SHR(-a0%,shift&)
+      ENDIF
+      a0%=y1%/z1&
+      IF a0%>0
+        y1&=128-SHR(a0%,shift&)
+      ELSE
+        y1&=128+SHR(-a0%,shift&)
+      ENDIF
+      '
+      IF x1&>0 AND x1&<640 AND y1&>0 AND y1&<500
+      ELSE
+        y1&=3200
+        x1&=3200
+      ENDIF
+    ENDIF
+  ENDIF
+RETURN
+'
+RBOX vistest(a&,b&,c&)
+x1&=hl&(b&,0)-hl&(a&,0)
+y1&=hl&(b&,1)-hl&(a&,1)
+x2&=hl&(b&,0)-hl&(c&,0)
+y2&=hl&(b&,1)-hl&(c&,1)
+zn%=y2&*x1&-y1&*x2&
+RETURN SGN(-zn%)
+ENDFUNC
+RBOX cliptestli(p%,q%)
+$F%
+i&=-1
+IF p%<0
+IF ABS(q%)>-p%
+  IF q%<0
+    i&=0
+  ENDIF
+ELSE
+  ~C:ltow%(L:V:p%,L:V:q%,L:V:q%)
+  p&=p%
+  q&=q%
+  r&=SHR(SWAP(q&)/p&,1)
+  IF r&>u2&
+    i&=0
+  ELSE IF r&>u1&
+    u1&=r&
+  ENDIF
+ENDIF
+ELSE
+IF p%>0
+  IF ABS(q%)>p%
+    IF q%<0
+      i&=0
+    ENDIF
+  ELSE
+    ~C:ltow%(L:V:p%,L:V:q%,L:V:q%)
+    p&=p%
+    q&=q%
+    r&=SHR(SWAP(q&)/p&,1)
+    IF r&<u1&
+      i&=0
+    ELSE IF r&<u2&
+      u2&=r&
+    ENDIF
+  ENDIF
+ELSE
+  IF q%<0
+    i&=0
+  ENDIF
+ENDIF
+ENDIF
+RETURN i&
+ENDFUNC
+'
+RBOX allocblock(size%,soort%)
+$F%
+'
+' +0 *nextblock
+' +4 *prevblock
+' +8 size
+'
+IF firstblock%=0
+newblock%=AllocMem(size%+16,soort%)
+IF newblock%
+{newblock%+0}=0
+{newblock%+4}=0
+{newblock%+8}=size%+16
+{newblock%+12}=CVI("BLCK")
+firstblock%=newblock%
+lastblock%=newblock%
+ADD newblock%,16
+ENDIF
+ELSE
+newblock%=AllocMem(size%+16,soort%)
+IF newblock%
+{newblock%+0}=0
+{newblock%+4}=lastblock%
+{newblock%+8}=size%+16
+{newblock%+12}=CVI("BLCK")
+{lastblock%}=newblock%
+lastblock%=newblock%
+ADD newblock%,16
+ENDIF
+ENDIF
+RETURN newblock%
+ENDFUNC
+RBOX cliptesti(p&,q&)
+$F%
+i&=-1
+IF p&<0
+IF ABS(q&)>-p&
+IF q&<0
+i&=0
+ENDIF
+ELSE
+r&=SHR(SWAP(q&)/p&,1)
+IF r&>u2&
+i&=0
+ELSE IF r&>u1&
+u1&=r&
+ENDIF
+ENDIF
+ELSE
+IF p&>0
+IF ABS(q&)>p&
+IF q&<0
+  i&=0
+ENDIF
+ELSE
+r&=SHR(SWAP(q&)/p&,1)
+IF r&<u1&
+  i&=0
+ELSE IF r&<u2&
+  u2&=r&
+ENDIF
+ENDIF
+ELSE
+IF q&<0
+i&=0
+ENDIF
+ENDIF
+ENDIF
+RETURN i&
+ENDFUNC
+'
+> PROCEDURE waitsignal(wait&)
+sig%=0
+FOR win&=1 TO 2
+' LEES openstaande BOODSCHAPPEN IN
+IF WINDOW(win&)>0
+msgport%={WINDOW(win&)+86}
+IF msgport%
+sig%=sig% OR SHL(1,BYTE{msgport%+15})
+ready&=FALSE
+WHILE NOT (ready& OR back&)
+  @decodemsg(GetMsg(msgport%))
+WEND
+ENDIF
+ENDIF
+NEXT win&
+IF wait&
+~Wait(sig%)
+win&=WINDOW({_IntBase+52})
+IF win&<>0
+msgport%={WINDOW(win&)+86}
+IF msgport%
+@decodemsg(GetMsg(msgport%))
+ENDIF
+ELSE
+FOR win&=0 TO 10
+IF WINDOW(win&)
+  msgport%={WINDOW(win&)+86}
+  @decodemsg(GetMsg(msgport%))
+ENDIF
+NEXT win&
+ENDIF
+ENDIF
+RETURN
+> PROCEDURE decodemsg(msg%)
+IF msg%<>0
+menu1%={msg%+20}
+menu2%=WORD{msg%+24}
+menu3%=WORD{msg%+26}
+LOCATE 1,2
+PRINT HEX$(menu1%,8)
+PRINT HEX$(menu2%,8)
+PRINT HEX$(menu3%,8)
+IF menu1% AND &HC0000
+task%=FindTask(0)
+IF WINDOW({_IntBase+52})  ! Is een Traces window aktief?
+~SetTaskPri(task%,0)
+ELSE
+~SetTaskPri(task%,-1)
+ENDIF
+ENDIF
+IF menu1% AND &H400
+ENDIF
+~ReplyMsg(msg%)
+ELSE
+ready&=TRUE
+ENDIF
+RETURN
+'
+> PROCEDURE laadiff(s%,file$)
+IF file$<>"" AND RIGHT$(file$,1)<>":" AND RIGHT$(file$,1)<>"/" AND EXIST(file$)
+dosfile$=file$+CHR$(0)
+handle%=Open(V:dosfile$,1005)
+~Seek(handle%,0,1)
+filelen%=Seek(handle%,0,-1)
+mem%=@allocblock(filelen%,&H10001)
+IF mem%=0
+~Close(handle%)
+CLR handle%
+ALERT 0,"Not enough memory",0,"OK",v&
+ELSE
+~Read(handle%,mem%,filelen%)
+~Close(handle%)
+CLR handle%
+ENDIF
+ENDIF
+'
+IF mem%
+point%=mem%
+anim&=FALSE
+tranim&=FALSE
+'
+IF MKL$({ADD(point%,8)})<>"ILBM" AND MKL$({ADD(point%,8)})<>"ANIM" AND MKL$({ADD(point%,8)})<>"TRA1"
+ALERT 0,"No ILBM file !",0,"OK",v&
+ELSE
+IF MKL$({ADD(point%,8)})="ANIM"
+anim&=TRUE
+ADD point%,12
+ENDIF
+IF MKL$({ADD(point%,8)})="TRAC"
+tranim&=TRUE
+ADD point%,12
+ENDIF
+ADD point%,12
+CLR bmhd!,cmap!,body!,camg!
+find_camg(point%)
+'
+WHILE NOT (point%>=mem%+filelen%) OR (bmhd! AND cmap! AND body!)
+@read_chunk
+WEND
+'
+ENDIF
+freeblock(mem%)
+ELSE
+sluit
+ENDIF
+RETURN
+'
+> PROCEDURE find_camg(point%)
+REPEAT
+len%={ADD(point%,4)}
+IF MKL$({point%})="CAMG"
+ADD point%,8
+camg!=TRUE
+camg%={point%}
+ADD point%,len%+(len% AND 1)
+ELSE
+ADD point%,len%+(len% AND 1)+8   ! skip chunk
+ENDIF
+UNTIL (point%>=mem%+filelen%) OR camg!
+RETURN
+> PROCEDURE read_chunk
+len%={ADD(point%,4)}
+ADD point%,8
+SELECT MKL$({SUB(point%,8)})
+CASE "BMHD"
+@read_bmhd
+CASE "CMAP"
+@read_cmap
+CASE "BODY"
+@read_body
+ENDSELECT
+ADD point%,len%+(len% AND 1)
+RETURN
+> PROCEDURE read_bmhd
+bmhd!=TRUE
+bmhd%=point%
+w&=CARD{point%}
+h&=CARD{ADD(point%,2)}
+d|=BYTE{ADD(point%,8)}
+c|=BYTE{ADD(point%,10)}
+sw&=CARD{ADD(point%,16)}
+sh&=CARD{ADD(point%,18)}
+rb&=SHR(w&,3)
+srb&=SHR(sw&,3)
+IF camg!
+v%=camg%
+ELSE
+CLR v%
+IF sw&>420
+v%=OR(v%,&H8000)
+ENDIF
+IF sh&>356
+v%=OR(v%,4)
+ENDIF
+ENDIF
+IF v% AND &H8000
+IF d|>4
+d|=4
+ENDIF
+ELSE
+IF d|>6
+d|=6
+ENDIF
+ENDIF
+cols&=BSET(0,d|)
+OPENS s%,0,0,w&,h&,d|,v%
+FRONTS s%
+RETURN
+> PROCEDURE read_cmap
+LOCAL v&,col&
+cmap!=TRUE
+FOR v&=0 TO PRED(cols&)
+v%=ADD(point%,MUL(3,v&))
+r|=BYTE{v%} AND &HF0
+g|=BYTE{SUCC(v%)} AND &HF0
+b|=BYTE{ADD(v%,2)} AND &HF0
+'
+col&=SHL(r|,4)+g|+SHR(b|,4)
+OPENS s%
+SETCOLOR v&,col&
+NEXT v&
+RETURN
+> PROCEDURE read_body
+LOCAL rr%,pp%
+'
+body!=TRUE
+IF c|=1
+reg%(8)=SCREEN(s%)+184
+reg%(9)=point%
+reg%(11)=bmhd%
+reg%(12)=-1
+RCALL laadiff%,reg%()
+ENDIF
+RETURN
+> PROCEDURE schrijfiff(scherm&,naam$)
+naam$=naam$+CHR$(0)
+reg%(0)=SCREEN(scherm&)
+reg%(1)=V:naam$
+reg%(3)=_DosBase
+RCALL schrijfiff%,reg%()
+RETURN
+'
+> PROCEDURE ldfont(font$,size&,VAR font%)
+LOCAL l$,t$
+'
+l$="diskfont.library"+CHR$(0)
+IF dfont_lib%=0
+~FRE(0)
+dfont_lib%=OpenLibrary(V:l$,0)
+ENDIF
+'
+IF dfont_lib%
+'
+IF font%<>0
+~CloseFont(font%)
+~RemFont(font%)
+font%=0
+ENDIF
+'
+font$=font$+".font"+CHR$(0)
+~FRE(0)
+t$=MKL$(V:font$)+MKI$(size&)+MKI$(0)
+font%=OpenFont(V:t$)                ! ROM-Font?
+IF (font%=0) OR (INT(font%)<>size&)
+font%=OpenDiskFont(V:t$)          ! DISK-Font
+ENDIF
+IF font%=0
+PRINT font$;" not found !"
+ENDIF
+ELSE
+PRINT "can't open diskfont.library !"
+ENDIF
+RETURN
+> PROCEDURE clfont(VAR font%)
+IF font%<>0
+~RemFont(font%)
+~CloseFont(font%)
+font%=0
+ENDIF
+RETURN
+> PROCEDURE setfont(wi%,font%)
+IF WINDOW(wi%)
+rp%={WINDOW(wi%)+50}
+IF rp%<>0 AND font%<>0
+~SetFont(rp%,font%)
+~SetSoftStyle(rp%,0,AskSoftStyle(rp%))
+'    PRINT CHR$(27);"c"                            ! Für Print
+ENDIF
+ENDIF
+RETURN
+'
+> PROCEDURE checktoets
+a$=INKEY$
+IF ASC(a$)=155
+a&=ASC(RIGHT$(a$,1))
+IF a&=65
+scroll(0,-1)
+ELSE IF a&=66
+scroll(0,1)
+ELSE IF a&=67
+scroll(1,0)
+ELSE IF a&=68
+scroll(-1,0)
+ENDIF
+ELSE
+IF a$=CHR$(13)
+WORD{rinfo%+10}=WORD{rinfo%+10} XOR 700
+WORD{rinfo2%+10}=WORD{rinfo%+10}+dy&
+~RemakeDisplay()
+ENDIF
+ENDIF
+VSYNC
+RETURN
+> PROCEDURE scroll(dx&,dy&)
+LOCAL a&
+IF (dx& OR dy&)=0
+x_off&=0
+y_off&=0
+ELSE
+IF viewm% AND &H8000
+ADD dx&,dx&
+ENDIF
+IF viewm% AND &H4
+ADD dy&,dy&
+ENDIF
+ADD x_off&,dx&
+ADD y_off&,dy&
+ENDIF
+IF SCREEN(1)
+WORD{SCREEN(1)+44+28}=x_off&
+WORD{SCREEN(1)+44+30}=y_off&
+ENDIF
+~RemakeDisplay()
+RETURN
+> PROCEDURE dualpf
+dualpf%=@allocblock(100,&H10001)
+bitm%=SCREEN(1)+184
+BMOVE bitm%,dualpf%+32,50
+{dualpf%+4}=dualpf%+32
+WORD{dualpf%+8}=-3
+WORD{dualpf%+10}=0
+{rinfo%}=dualpf%
+rinfo2%=dualpf%
+RETURN
+'
